@@ -1,4 +1,4 @@
-name: Build
+name: Build Alpine Dev
 
 on:
   workflow_dispatch:
@@ -6,24 +6,24 @@ on:
     branches:
       - 'main'
     paths:
-      - 'VERSION'
+      - 'DEV-VERSION'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      OUTPUT_BINARY: ghproxy
-      OUTPUT_ARCHIVE: ghproxy.tar.gz
+      OUTPUT_BINARY: ghproxy-alpine
+      OUTPUT_ARCHIVE: ghproxy-alpine.tar.gz
       GO_VERSION: 1.23.2
 
     steps:
       - uses: actions/checkout@v3
       - name: Load VERSION
         run: |
-          if [ -f VERSION ]; then
-            echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
+          if [ -f DEV-VERSION ]; then
+            echo "VERSION=$(cat DEV-VERSION)" >> $GITHUB_ENV
           else
-            echo "VERSION file not found!" && exit 1
+            echo "DEV-VERSION file not found!" && exit 1
           fi
       - name: Set up Go
         uses: actions/setup-go@v3
@@ -31,7 +31,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Build
         run: |
-          go build -o  ${{ env.OUTPUT_BINARY }} ./main.go
+          CGO_ENABLED=0 go build -o  ${{ env.OUTPUT_BINARY }} ./main.go
       - name: Package
         run: |
           tar -czvf ${{ env.OUTPUT_ARCHIVE }} ./${{ env.OUTPUT_BINARY }}
@@ -51,26 +51,27 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ env.VERSION }}
           allowUpdates: true
+          prerelease: true
         env:
-          export PATH: $PATH:/usr/local/go/bin     
-
+          export PATH: $PATH:/usr/local/go/bin 
+              
   docker:
     runs-on: ubuntu-latest
-    needs: build  # 确保这个作业在 build 作业完成后运行
+    needs: build
     env:
-      IMAGE_NAME: wjqserver/ghproxy  # 定义镜像名称变量
-      DOCKERFILE: docker/dockerfile/release/Dockerfile
-
+      IMAGE_NAME: wjqserver/ghproxy
+      DOCKERFILE: docker/dockerfile/alpine/Dockerfile
+        
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Load VERSION
         run: |
-          if [ -f VERSION ]; then
-            echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
+          if [ -f DEV-VERSION ]; then
+            echo "VERSION=$(cat DEV-VERSION)" >> $GITHUB_ENV
           else
-            echo "VERSION file not found!" && exit 1
-          fi      
+            echo "DEV-VERSION file not found!" && exit 1
+          fi        
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -91,5 +92,5 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: | 
-            ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
-            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:alpine-${{ env.VERSION }}
+            ${{ env.IMAGE_NAME }}:alpine-dev
